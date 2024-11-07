@@ -27,7 +27,10 @@ namespace BumbleBeeFoundation_API.Controllers
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginViewModel model)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
 
             using (SqlConnection connection = new SqlConnection(_connectionString))
             {
@@ -58,12 +61,13 @@ namespace BumbleBeeFoundation_API.Controllers
                                         {
                                             if (await companyReader.ReadAsync())
                                             {
-                                                return Ok(new
+                                                return Ok(new LoginResponse
                                                 {
                                                     UserId = userId,
                                                     Role = role,
                                                     CompanyID = companyReader.GetInt32(companyReader.GetOrdinal("CompanyID")),
-                                                    CompanyName = companyReader.GetString(companyReader.GetOrdinal("CompanyName"))
+                                                    CompanyName = companyReader.GetString(companyReader.GetOrdinal("CompanyName")),
+                                                    UserEmail = model.Email
                                                 });
                                             }
                                             return BadRequest("Company ID not found.");
@@ -71,7 +75,7 @@ namespace BumbleBeeFoundation_API.Controllers
                                     }
                                 }
 
-                                return Ok(new { UserId = userId, Role = role });
+                                return Ok(new LoginResponse { UserId = userId, Role = role });
                             }
                             return Unauthorized("Invalid login attempt.");
                         }

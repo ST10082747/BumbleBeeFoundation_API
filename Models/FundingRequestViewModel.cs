@@ -7,14 +7,14 @@ namespace BumbleBeeFoundation_API.Models
 
         public int RequestID { get; set; }
         public int CompanyID { get; set; }
-        public string ProjectDescription { get; set; }
+        public string? ProjectDescription { get; set; }
         public decimal RequestedAmount { get; set; }
-        public string ProjectImpact { get; set; }
+        public string? ProjectImpact { get; set; }
         public string Status { get; set; } = "Pending";
         public DateTime SubmittedAt { get; set; }
-        public string CompanyName { get; set; }
+        public string? CompanyName { get; set; }
         public List<AttachmentViewModel> Attachments { get; set; } = new List<AttachmentViewModel>();
-        public string AdminMessage { get; set; }
+        public string? AdminMessage { get; set; }
     }
 
     public class AttachmentViewModel

@@ -72,5 +72,14 @@ namespace BumbleBeeFoundation_API.Models
         public string Email { get; set; }  // Hidden field for passing the email to the controller
     }
 
+    public class LoginResponse
+    {
+        public int UserId { get; set; }
+        public string Role { get; set; }
+        public int? CompanyID { get; set; }
+        public string CompanyName { get; set; }
+        public string UserEmail { get; set; }
+    }
+
 
 }
