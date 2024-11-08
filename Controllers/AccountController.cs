@@ -39,7 +39,6 @@ namespace BumbleBeeFoundation_API.Controllers
                 using (SqlCommand command = new SqlCommand(userQuery, connection))
                 {
                     command.Parameters.AddWithValue("@Email", model.Email);
-
                     using (SqlDataReader reader = await command.ExecuteReaderAsync())
                     {
                         if (await reader.ReadAsync())
@@ -51,6 +50,7 @@ namespace BumbleBeeFoundation_API.Controllers
                                 string role = reader.GetString(reader.GetOrdinal("Role"));
                                 reader.Close();
 
+                                // For Company role
                                 if (role == "Company")
                                 {
                                     string companyQuery = "SELECT CompanyID, CompanyName FROM Companies WHERE UserID = @UserID";
@@ -75,7 +75,15 @@ namespace BumbleBeeFoundation_API.Controllers
                                     }
                                 }
 
-                                return Ok(new LoginResponse { UserId = userId, Role = role });
+                                // For all other roles (Donor, Admin, etc.)
+                                return Ok(new LoginResponse
+                                {
+                                    UserId = userId,
+                                    Role = role,
+                                    UserEmail = model.Email,  // Include email for all users
+                                    CompanyID = null,
+                                    CompanyName = null
+                                });
                             }
                             return Unauthorized("Invalid login attempt.");
                         }

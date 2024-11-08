@@ -77,7 +77,7 @@ namespace BumbleBeeFoundation_API.Models
         public int UserId { get; set; }
         public string Role { get; set; }
         public int? CompanyID { get; set; }
-        public string CompanyName { get; set; }
+        public string? CompanyName { get; set; }
         public string UserEmail { get; set; }
     }
 
