@@ -148,8 +148,6 @@ namespace BumbleBeeFoundation_API.Controllers
             }
         }
 
-
-
         // GET: api/company/FundingRequestConfirmation/{id}
         [HttpGet("FundingRequestConfirmation/{id}")]
         public async Task<ActionResult<FundingRequestViewModel>> FundingRequestConfirmation(int id)
@@ -252,48 +250,87 @@ namespace BumbleBeeFoundation_API.Controllers
 
         // POST: api/company/UploadDocument
         [HttpPost("upload-document")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UploadDocument([FromForm] int requestId, IFormFile document)
+        public async Task<IActionResult> UploadDocument([FromForm] int requestId, [FromForm] int companyId, IFormFile document)
         {
             if (document == null || document.Length == 0)
             {
                 return BadRequest("No file uploaded.");
             }
 
-            var companyId = HttpContext.Session.GetInt32("CompanyID");
-            if (companyId == null)
+            // List of allowed file types
+            var allowedTypes = new Dictionary<string, string>
             {
-                return Unauthorized("CompanyID not found.");
+                // Documents
+                { ".pdf", "application/pdf" },
+                { ".doc", "application/msword" },
+                { ".docx", "application/docx" },
+                { ".txt", "text/plain" },
+        
+                // Images
+                { ".jpg", "image/jpeg" },
+                { ".jpeg", "image/jpeg" },
+                { ".png", "image/png" }
+            };
+
+            // Get file extension
+            string fileExtension = Path.GetExtension(document.FileName).ToLowerInvariant();
+
+            // Check if file type is allowed
+            if (!allowedTypes.ContainsKey(fileExtension))
+            {
+                return BadRequest("File type not supported. Supported types are: PDF, DOC, DOCX, TXT, JPG, JPEG, and PNG.");
             }
 
-            using (var connection = new SqlConnection(_connectionString))
+            // Get simplified content type
+            string documentType = allowedTypes[fileExtension];
+
+            try
             {
-                await connection.OpenAsync();
-
-                using (var memoryStream = new MemoryStream())
+                using (var connection = new SqlConnection(_connectionString))
                 {
-                    await document.CopyToAsync(memoryStream);
-                    byte[] fileContent = memoryStream.ToArray();
+                    await connection.OpenAsync();
 
-                    string query = "INSERT INTO Documents (DocumentName, DocumentType, UploadDate, Status, CompanyID, FileContent, RequestID) " +
-                                   "VALUES (@DocumentName, @DocumentType, @UploadDate, @Status, @CompanyID, @FileContent, @RequestID)";
-
-                    using (var command = new SqlCommand(query, connection))
+                    using (var memoryStream = new MemoryStream())
                     {
-                        command.Parameters.AddWithValue("@DocumentName", document.FileName);
-                        command.Parameters.AddWithValue("@DocumentType", document.ContentType);
-                        command.Parameters.AddWithValue("@UploadDate", DateTime.Now);
-                        command.Parameters.AddWithValue("@Status", "Pending");
-                        command.Parameters.AddWithValue("@CompanyID", companyId);
-                        command.Parameters.AddWithValue("@FileContent", fileContent);
-                        command.Parameters.AddWithValue("@RequestID", requestId);
+                        await document.CopyToAsync(memoryStream);
+                        byte[] fileContent = memoryStream.ToArray();
 
-                        await command.ExecuteNonQueryAsync();
+                        if (fileContent.Length > 10 * 1024 * 1024) // 10MB limit
+                        {
+                            return BadRequest("File size exceeds 10MB limit.");
+                        }
+
+                        string query = @"INSERT INTO Documents 
+                               (DocumentName, DocumentType, UploadDate, Status, CompanyID, FileContent, RequestID) 
+                               VALUES 
+                               (@DocumentName, @DocumentType, @UploadDate, @Status, @CompanyID, @FileContent, @RequestID)";
+
+                        using (var command = new SqlCommand(query, connection))
+                        {
+                            command.Parameters.AddWithValue("@DocumentName", Path.GetFileName(document.FileName));
+                            command.Parameters.AddWithValue("@DocumentType", documentType);
+                            command.Parameters.AddWithValue("@UploadDate", DateTime.Now);
+                            command.Parameters.AddWithValue("@Status", "Pending");
+                            command.Parameters.AddWithValue("@CompanyID", companyId);
+                            command.Parameters.AddWithValue("@FileContent", fileContent);
+                            command.Parameters.AddWithValue("@RequestID", requestId);
+
+                            await command.ExecuteNonQueryAsync();
+                        }
                     }
                 }
-            }
 
-            return Ok("Document uploaded successfully.");
+                return Ok(new
+                {
+                    message = "Document uploaded successfully.",
+                    fileName = document.FileName,
+                    type = documentType
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
         }
 
 
