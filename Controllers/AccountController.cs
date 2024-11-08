@@ -143,49 +143,53 @@ namespace BumbleBeeFoundation_API.Controllers
             }
         }
 
-        // POST api/account/forgotpassword
-        [HttpPost("forgotpassword")]
+        // POST: api/account/forgot-password
+        [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordViewModel model)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            using (SqlConnection connection = new SqlConnection(_connectionString))
+            using (var connection = new SqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
                 string query = "SELECT UserID FROM Users WHERE Email = @Email";
-                using (SqlCommand command = new SqlCommand(query, connection))
+                using (var command = new SqlCommand(query, connection))
                 {
                     command.Parameters.AddWithValue("@Email", model.Email);
                     var userId = await command.ExecuteScalarAsync();
 
                     if (userId != null)
                     {
-                        return Ok("Password reset instructions sent.");
+                        return Ok(new { message = "Email found. Please proceed to reset password." });
                     }
-                    return NotFound("Email not found.");
+                    else
+                    {
+                        return NotFound("Email not found.");
+                    }
                 }
             }
         }
 
-        // POST api/account/resetpassword
-        [HttpPost("resetpassword")]
+        // POST: api/account/reset-password
+        [HttpPost("reset-password")]
         public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordViewModel model)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            using (SqlConnection connection = new SqlConnection(_connectionString))
+            using (var connection = new SqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
                 string query = "UPDATE Users SET Password = @Password WHERE Email = @Email";
-                using (SqlCommand command = new SqlCommand(query, connection))
+                using (var command = new SqlCommand(query, connection))
                 {
                     command.Parameters.AddWithValue("@Password", HashPassword(model.NewPassword));
                     command.Parameters.AddWithValue("@Email", model.Email);
                     await command.ExecuteNonQueryAsync();
                 }
             }
-            return Ok("Password reset successful.");
+            return Ok("Password reset successfully.");
         }
+
 
         // Helper methods for password hashing and verification
         private string HashPassword(string password)
