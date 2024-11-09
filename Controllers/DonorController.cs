@@ -1,5 +1,6 @@
 ﻿using BumbleBeeFoundation_API.Models;
 using Microsoft.AspNetCore.Mvc;
+using System.Data;
 using System.Data.SqlClient;
 
 namespace BumbleBeeFoundation_API.Controllers
@@ -55,37 +56,83 @@ namespace BumbleBeeFoundation_API.Controllers
         }
 
         [HttpPost("Donate")]
-        public async Task<IActionResult> CreateDonation([FromBody] DonationViewModel model)
+        public async Task<ActionResult<ApiResponse<DonationResponse>>> CreateDonation([FromForm] DonationViewModel model, IFormFile? documentUpload)
         {
-            int donationId;
-            using (SqlConnection connection = new SqlConnection(_connectionString))
+            if (!ModelState.IsValid)
             {
-                await connection.OpenAsync();
-                string query = @"INSERT INTO Donations (DonationDate, DonationType, DonationAmount, DonorName,
-                          DonorIDNumber, DonorTaxNumber, DonorEmail, DonorPhone, DocumentPath, PaymentStatus)
-                 VALUES (@DonationDate, @DonationType, @DonationAmount, @DonorName, 
-                         @DonorIDNumber, @DonorTaxNumber, @DonorEmail, @DonorPhone, 
-                         @DocumentPath, 'Pending');
-                 SELECT CAST(SCOPE_IDENTITY() as int);";
-
-                using (SqlCommand command = new SqlCommand(query, connection))
+                return BadRequest(new ApiResponse<DonationResponse>
                 {
-                    command.Parameters.AddWithValue("@DonationDate", DateTime.Now);
-                    command.Parameters.AddWithValue("@DonationType", model.DonationType);
-                    command.Parameters.AddWithValue("@DonationAmount", model.DonationAmount);
-                    command.Parameters.AddWithValue("@DonorName", model.DonorName);
-                    command.Parameters.AddWithValue("@DonorIDNumber", model.DonorIDNumber);
-                    command.Parameters.AddWithValue("@DonorTaxNumber", model.DonorTaxNumber);
-                    command.Parameters.AddWithValue("@DonorEmail", model.DonorEmail);
-                    command.Parameters.AddWithValue("@DonorPhone", model.DonorPhone);
-                    command.Parameters.AddWithValue("@DocumentPath", (object)model.DocumentPath ?? DBNull.Value);
+                    Success = false,
+                    Message = "Invalid model state"
+                });
+            }
 
-                    donationId = await command.ExecuteScalarAsync() as int? ?? 0;
+            int donationId;
+            byte[] documentBytes = null;
+
+            // Process the document upload if it exists
+            if (documentUpload != null)
+            {
+                using (var memoryStream = new MemoryStream())
+                {
+                    await documentUpload.CopyToAsync(memoryStream);
+                    documentBytes = memoryStream.ToArray();
                 }
             }
 
-            return CreatedAtAction(nameof(GetDonation), new { id = donationId }, model);
+            try
+            {
+                using (SqlConnection connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    string query = @"INSERT INTO Donations (
+                    DonationDate, DonationType, DonationAmount, DonorName,
+                    DonorIDNumber, DonorTaxNumber, DonorEmail, DonorPhone, 
+                    DocumentPath, PaymentStatus)
+                VALUES (
+                    @DonationDate, @DonationType, @DonationAmount, @DonorName, 
+                    @DonorIDNumber, @DonorTaxNumber, @DonorEmail, @DonorPhone, 
+                    @DocumentPath, 'Pending');
+                SELECT CAST(SCOPE_IDENTITY() as int);";
+
+                    using (SqlCommand command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@DonationDate", DateTime.Now);
+                        command.Parameters.AddWithValue("@DonationType", model.DonationType);
+                        command.Parameters.AddWithValue("@DonationAmount", model.DonationAmount);
+                        command.Parameters.AddWithValue("@DonorName", model.DonorName);
+                        command.Parameters.AddWithValue("@DonorIDNumber", model.DonorIDNumber);
+                        command.Parameters.AddWithValue("@DonorTaxNumber", model.DonorTaxNumber);
+                        command.Parameters.AddWithValue("@DonorEmail", model.DonorEmail);
+                        command.Parameters.AddWithValue("@DonorPhone", model.DonorPhone);
+                        command.Parameters.Add("@DocumentPath", SqlDbType.VarBinary).Value = (object)documentBytes ?? DBNull.Value;
+
+                        donationId = (int)(await command.ExecuteScalarAsync() ?? 0);
+                    }
+                }
+
+                return Ok(new ApiResponse<DonationResponse>
+                {
+                    Success = true,
+                    Data = new DonationResponse
+                    {
+                        DonationId = donationId,
+                        Success = true,
+                        Message = "Donation saved successfully"
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save donation");
+                return StatusCode(500, new ApiResponse<DonationResponse>
+                {
+                    Success = false,
+                    Message = "Failed to save donation"
+                });
+            }
         }
+
 
         [HttpGet("Donation/{id}")]
         public async Task<IActionResult> GetDonation(int id)
