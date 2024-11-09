@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using System.Data.SqlClient;
 using BumbleBeeFoundation_API.Models;
+using System.Text;
 
 namespace BumbleBeeFoundation_API.Controllers
 {
@@ -307,8 +308,281 @@ namespace BumbleBeeFoundation_API.Controllers
             }
             return Ok(new { message = "Company rejected with reason: " + rejectionReason });
         }
-    
 
+
+
+        // donations
+        // GET: api/donations
+        [HttpGet("donations")]
+        public async Task<ActionResult<IEnumerable<Donation>>> GetDonations()
+        {
+            var donations = new List<Donation>();
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand(@"
+                    SELECT d.*, c.CompanyName 
+                    FROM Donations d 
+                    LEFT JOIN Companies c ON d.CompanyID = c.CompanyID", connection))
+                    {
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                donations.Add(new Donation
+                                {
+                                    DonationID = reader.GetInt32(reader.GetOrdinal("DonationID")),
+                                    CompanyID = reader.IsDBNull(reader.GetOrdinal("CompanyID")) ? (int?)null : reader.GetInt32(reader.GetOrdinal("CompanyID")),
+                                    CompanyName = reader.IsDBNull(reader.GetOrdinal("CompanyName")) ? null : reader.GetString(reader.GetOrdinal("CompanyName")),
+                                    DonationDate = reader.GetDateTime(reader.GetOrdinal("DonationDate")),
+                                    DonationType = reader.GetString(reader.GetOrdinal("DonationType")),
+                                    DonationAmount = reader.GetDecimal(reader.GetOrdinal("DonationAmount")),
+                                    DonorName = reader.GetString(reader.GetOrdinal("DonorName")),
+                                    DonorEmail = reader.GetString(reader.GetOrdinal("DonorEmail")),
+                                    PaymentStatus = reader.IsDBNull(reader.GetOrdinal("PaymentStatus")) ? null : reader.GetString(reader.GetOrdinal("PaymentStatus")),
+                                    DocumentFileName = reader.IsDBNull(reader.GetOrdinal("DocumentPath")) ? null : "Attached Document"
+                                });
+                            }
+                        }
+                    }
+                }
+                return Ok(donations);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving donations");
+                return StatusCode(500, "Internal server error while retrieving donations");
+            }
+        }
+
+        // GET: api/donations/{id}
+        [HttpGet("donations/{id}")]
+        public async Task<ActionResult<Donation>> GetDonation(int id)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    string sql = @"
+                    SELECT d.*, c.CompanyName 
+                    FROM Donations d 
+                    LEFT JOIN Companies c ON d.CompanyID = c.CompanyID 
+                    WHERE d.DonationID = @DonationID";
+
+                    using (var command = new SqlCommand(sql, connection))
+                    {
+                        command.Parameters.AddWithValue("@DonationID", id);
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            if (await reader.ReadAsync())
+                            {
+                                var donation = new Donation
+                                {
+                                    DonationID = reader.GetInt32(reader.GetOrdinal("DonationID")),
+                                    CompanyID = reader.IsDBNull(reader.GetOrdinal("CompanyID")) ? (int?)null : reader.GetInt32(reader.GetOrdinal("CompanyID")),
+                                    CompanyName = reader.IsDBNull(reader.GetOrdinal("CompanyName")) ? null : reader.GetString(reader.GetOrdinal("CompanyName")),
+                                    DonationDate = reader.GetDateTime(reader.GetOrdinal("DonationDate")),
+                                    DonationType = reader.GetString(reader.GetOrdinal("DonationType")),
+                                    DonationAmount = reader.GetDecimal(reader.GetOrdinal("DonationAmount")),
+                                    DonorName = reader.GetString(reader.GetOrdinal("DonorName")),
+                                    DonorIDNumber = reader.GetString(reader.GetOrdinal("DonorIDNumber")),
+                                    DonorTaxNumber = reader.GetString(reader.GetOrdinal("DonorTaxNumber")),
+                                    DonorEmail = reader.GetString(reader.GetOrdinal("DonorEmail")),
+                                    DonorPhone = reader.GetString(reader.GetOrdinal("DonorPhone"))
+                                };
+                                return Ok(donation);
+                            }
+                        }
+                    }
+                }
+                return NotFound();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving donation details for ID: {DonationId}", id);
+                return StatusCode(500, "Internal server error while retrieving donation details");
+            }
+        }
+
+        // PUT: api/donations/{id}/approve
+        [HttpPut("donations/{id}/approve")]
+        public async Task<ActionResult<Donation>> ApproveDonation(int id)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+
+                    // Update payment status
+                    var updateSql = "UPDATE Donations SET PaymentStatus = 'Processed' WHERE DonationID = @DonationID";
+                    using (var command = new SqlCommand(updateSql, connection))
+                    {
+                        command.Parameters.AddWithValue("@DonationID", id);
+                        int rowsAffected = await command.ExecuteNonQueryAsync();
+
+                        if (rowsAffected == 0)
+                        {
+                            return NotFound();
+                        }
+                    }
+
+                    // Return the updated donation
+                    return await GetDonation(id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error approving donation for ID: {DonationId}", id);
+                return StatusCode(500, "Internal server error while approving donation");
+            }
+        }
+
+
+        // GET: api/donations/{id}/document
+        [HttpGet("donations/{id}/document")]
+        public async Task<IActionResult> GetDocument(int id)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand(@"
+                SELECT DocumentPath, DonorName, DonationDate 
+                FROM Donations 
+                WHERE DonationID = @DonationID", connection))
+                    {
+                        command.Parameters.AddWithValue("@DonationID", id);
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            if (await reader.ReadAsync() && !reader.IsDBNull(reader.GetOrdinal("DocumentPath")))
+                            {
+                                var documentBytes = (byte[])reader["DocumentPath"];
+                                var donorName = reader.GetString(reader.GetOrdinal("DonorName"));
+                                var donationDate = reader.GetDateTime(reader.GetOrdinal("DonationDate"));
+
+                                // Try to detect file type from bytes
+                                string contentType = "application/octet-stream";
+                                string extension = ".bin";
+
+                                // Check file signatures
+                                if (documentBytes.Length >= 4)
+                                {
+                                    // PDF signature
+                                    if (documentBytes[0] == 0x25 && documentBytes[1] == 0x50 &&
+                                        documentBytes[2] == 0x44 && documentBytes[3] == 0x46)
+                                    {
+                                        contentType = "application/pdf";
+                                        extension = ".pdf";
+                                    }
+                                    // PNG signature
+                                    else if (documentBytes[0] == 0x89 && documentBytes[1] == 0x50 &&
+                                            documentBytes[2] == 0x4E && documentBytes[3] == 0x47)
+                                    {
+                                        contentType = "image/png";
+                                        extension = ".png";
+                                    }
+                                    // JPEG signature
+                                    else if (documentBytes[0] == 0xFF && documentBytes[1] == 0xD8)
+                                    {
+                                        contentType = "image/jpeg";
+                                        extension = ".jpg";
+                                    }
+                                    // ZIP signature (which could be docx, xlsx, etc.)
+                                    else if (documentBytes[0] == 0x50 && documentBytes[1] == 0x4B &&
+                                            documentBytes[2] == 0x03 && documentBytes[3] == 0x04)
+                                    {
+                                        contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                                        extension = ".docx";
+                                    }
+                                    // Check if it might be a text file
+                                    else if (IsLikelyTextFile(documentBytes))
+                                    {
+                                        contentType = "text/plain";
+                                        extension = ".txt";
+                                    }
+                                }
+
+                                var fileName = $"Donation_{donorName}_{donationDate:yyyyMMdd}{extension}";
+                                return File(documentBytes, contentType, fileName);
+                            }
+                        }
+                    }
+                }
+                return NotFound("Document not found");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error downloading document for donation ID: {DonationId}", id);
+                return StatusCode(500, "Internal server error while downloading document");
+            }
+        }
+
+        private bool IsLikelyTextFile(byte[] bytes)
+        {
+            // Check if file is empty
+            if (bytes.Length == 0)
+                return false;
+
+            // Check for BOM markers
+            if (bytes.Length >= 3 &&
+                ((bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF) ||    // UTF-8
+                 (bytes[0] == 0xFE && bytes[1] == 0xFF) ||                        // UTF-16 BE
+                 (bytes[0] == 0xFF && bytes[1] == 0xFE)))                         // UTF-16 LE
+            {
+                return true;
+            }
+
+            // Check if the content contains only valid text characters
+            try
+            {
+                // Try to decode as UTF-8
+                string content = Encoding.UTF8.GetString(bytes);
+
+                // Check if the content contains only printable characters, whitespace, or common control characters
+                for (int i = 0; i < content.Length; i++)
+                {
+                    char c = content[i];
+                    if (!(char.IsLetterOrDigit(c) ||
+                          char.IsPunctuation(c) ||
+                          char.IsWhiteSpace(c) ||
+                          char.IsSymbol(c) ||
+                          c == '\r' ||
+                          c == '\n' ||
+                          c == '\t'))
+                    {
+                        return false;
+                    }
+                }
+
+                // Additional check: ensure there aren't too many consecutive null bytes
+                // which might indicate a binary file
+                int consecutiveNulls = 0;
+                for (int i = 0; i < bytes.Length; i++)
+                {
+                    if (bytes[i] == 0x00)
+                    {
+                        consecutiveNulls++;
+                        if (consecutiveNulls > 3) // Arbitrary threshold
+                            return false;
+                    }
+                    else
+                    {
+                        consecutiveNulls = 0;
+                    }
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
 
     }
