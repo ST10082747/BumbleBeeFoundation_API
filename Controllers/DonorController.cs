@@ -169,12 +169,12 @@ namespace BumbleBeeFoundation_API.Controllers
             {
                 await connection.OpenAsync();
                 string query = @"SELECT fr.RequestID, fr.CompanyID, c.CompanyName, fr.ProjectDescription,
-                      fr.RequestedAmount, fr.ProjectImpact, fr.Status, fr.SubmittedAt
-                      FROM FundingRequests fr
-                      INNER JOIN Companies c ON fr.CompanyID = c.CompanyID
-                      WHERE fr.Status IN ('Pending', 'Approved', 'Rejected')
-                      AND (c.CompanyName LIKE @SearchTerm OR fr.ProjectDescription LIKE @SearchTerm)
-                      ORDER BY fr.SubmittedAt DESC";
+                  fr.RequestedAmount, fr.ProjectImpact, fr.Status, fr.SubmittedAt
+                  FROM FundingRequests fr
+                  INNER JOIN Companies c ON fr.CompanyID = c.CompanyID
+                  WHERE fr.Status IN ('Pending', 'Approved', 'Rejected')
+                  AND (c.CompanyName LIKE @SearchTerm OR fr.ProjectDescription LIKE @SearchTerm)
+                  ORDER BY fr.SubmittedAt DESC";
 
                 using (SqlCommand command = new SqlCommand(query, connection))
                 {
