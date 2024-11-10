@@ -585,5 +585,122 @@ namespace BumbleBeeFoundation_API.Controllers
         }
 
 
+        // Funding management
+
+        // GET: api/Admin/FundingRequestManagement
+        [HttpGet("FundingRequestManagement")]
+        public async Task<IActionResult> GetFundingRequestManagement()
+        {
+            var fundingRequests = new List<FundingRequest>();
+
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                using (var command = new SqlCommand(@"
+                    SELECT fr.*, c.CompanyName 
+                    FROM FundingRequests fr 
+                    JOIN Companies c ON fr.CompanyID = c.CompanyID", connection))
+                {
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            fundingRequests.Add(new FundingRequest
+                            {
+                                RequestID = reader.GetInt32(reader.GetOrdinal("RequestID")),
+                                CompanyID = reader.GetInt32(reader.GetOrdinal("CompanyID")),
+                                CompanyName = reader.GetString(reader.GetOrdinal("CompanyName")),
+                                ProjectDescription = reader.GetString(reader.GetOrdinal("ProjectDescription")),
+                                RequestedAmount = reader.GetDecimal(reader.GetOrdinal("RequestedAmount")),
+                                ProjectImpact = reader.GetString(reader.GetOrdinal("ProjectImpact")),
+                                Status = reader.GetString(reader.GetOrdinal("Status")),
+                                SubmittedAt = reader.GetDateTime(reader.GetOrdinal("SubmittedAt")),
+                                AdminMessage = reader.IsDBNull(reader.GetOrdinal("AdminMessage")) ? null : reader.GetString(reader.GetOrdinal("AdminMessage"))
+                            });
+                        }
+                    }
+                }
+            }
+
+            return Ok(fundingRequests);
+        }
+
+        // GET: api/Admin/FundingRequestDetails/{id}
+        [HttpGet("FundingRequestDetails/{id}")]
+        public async Task<IActionResult> GetFundingRequestDetails(int id)
+        {
+            FundingRequest fundingRequest = null;
+
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                string sql = @"
+                    SELECT fr.*, c.CompanyName 
+                    FROM FundingRequests fr 
+                    JOIN Companies c ON fr.CompanyID = c.CompanyID 
+                    WHERE fr.RequestID = @RequestID";
+                using (var command = new SqlCommand(sql, connection))
+                {
+                    command.Parameters.AddWithValue("@RequestID", id);
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        if (await reader.ReadAsync())
+                        {
+                            fundingRequest = new FundingRequest
+                            {
+                                RequestID = reader.GetInt32(reader.GetOrdinal("RequestID")),
+                                CompanyID = reader.GetInt32(reader.GetOrdinal("CompanyID")),
+                                CompanyName = reader.GetString(reader.GetOrdinal("CompanyName")),
+                                ProjectDescription = reader.GetString(reader.GetOrdinal("ProjectDescription")),
+                                RequestedAmount = reader.GetDecimal(reader.GetOrdinal("RequestedAmount")),
+                                ProjectImpact = reader.GetString(reader.GetOrdinal("ProjectImpact")),
+                                Status = reader.GetString(reader.GetOrdinal("Status")),
+                                SubmittedAt = reader.GetDateTime(reader.GetOrdinal("SubmittedAt")),
+                                AdminMessage = reader.IsDBNull(reader.GetOrdinal("AdminMessage")) ? null : reader.GetString(reader.GetOrdinal("AdminMessage"))
+                            };
+                        }
+                    }
+                }
+            }
+
+            return fundingRequest != null ? Ok(fundingRequest) : NotFound();
+        }
+
+        // POST: api/Admin/ApproveFundingRequest
+        [HttpPost("ApproveFundingRequest")]
+        public async Task<IActionResult> ApproveFundingRequest(int id, [FromBody] string adminMessage)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                string sql = "UPDATE FundingRequests SET Status = 'Approved', AdminMessage = @AdminMessage WHERE RequestID = @RequestID";
+                using (var command = new SqlCommand(sql, connection))
+                {
+                    command.Parameters.AddWithValue("@RequestID", id);
+                    command.Parameters.AddWithValue("@AdminMessage", (object)adminMessage ?? DBNull.Value);
+                    await command.ExecuteNonQueryAsync();
+                }
+            }
+
+            return NoContent();
+        }
+
+        // POST: api/Admin/RejectFundingRequest
+        [HttpPost("RejectFundingRequest")]
+        public async Task<IActionResult> RejectFundingRequest(int id)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                string sql = "UPDATE FundingRequests SET Status = 'Rejected' WHERE RequestID = @RequestID";
+                using (var command = new SqlCommand(sql, connection))
+                {
+                    command.Parameters.AddWithValue("@RequestID", id);
+                    await command.ExecuteNonQueryAsync();
+                }
+            }
+
+            return NoContent();
+        }
     }
 }
