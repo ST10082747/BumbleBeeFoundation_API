@@ -2,6 +2,8 @@
 using System.Data.SqlClient;
 using BumbleBeeFoundation_API.Models;
 using System.Text;
+using System.Reflection.Metadata;
+using Document = BumbleBeeFoundation_API.Models.Document;
 
 namespace BumbleBeeFoundation_API.Controllers
 {
@@ -597,9 +599,13 @@ namespace BumbleBeeFoundation_API.Controllers
             {
                 await connection.OpenAsync();
                 using (var command = new SqlCommand(@"
-                    SELECT fr.*, c.CompanyName 
-                    FROM FundingRequests fr 
-                    JOIN Companies c ON fr.CompanyID = c.CompanyID", connection))
+            SELECT fr.*, c.CompanyName,
+                   CASE WHEN EXISTS (
+                       SELECT 1 FROM FundingRequestAttachments fra 
+                       WHERE fra.RequestID = fr.RequestID
+                   ) THEN 1 ELSE 0 END as HasAttachments
+            FROM FundingRequests fr 
+            JOIN Companies c ON fr.CompanyID = c.CompanyID", connection))
                 {
                     using (var reader = await command.ExecuteReaderAsync())
                     {
@@ -615,7 +621,8 @@ namespace BumbleBeeFoundation_API.Controllers
                                 ProjectImpact = reader.GetString(reader.GetOrdinal("ProjectImpact")),
                                 Status = reader.GetString(reader.GetOrdinal("Status")),
                                 SubmittedAt = reader.GetDateTime(reader.GetOrdinal("SubmittedAt")),
-                                AdminMessage = reader.IsDBNull(reader.GetOrdinal("AdminMessage")) ? null : reader.GetString(reader.GetOrdinal("AdminMessage"))
+                                AdminMessage = reader.IsDBNull(reader.GetOrdinal("AdminMessage")) ? null : reader.GetString(reader.GetOrdinal("AdminMessage")),
+                                HasAttachments = reader.GetInt32(reader.GetOrdinal("HasAttachments")) == 1
                             });
                         }
                     }
@@ -624,6 +631,120 @@ namespace BumbleBeeFoundation_API.Controllers
 
             return Ok(fundingRequests);
         }
+
+        // 3. Add new endpoint to get attachments for a specific request
+        [HttpGet("FundingRequestAttachments/{requestId}")]
+        public async Task<IActionResult> GetFundingRequestAttachments(int requestId)
+        {
+            var attachments = new List<AttachmentViewModel>();
+
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                using (var command = new SqlCommand(@"
+            SELECT AttachmentID, RequestID, FileName, ContentType, UploadedAt
+            FROM FundingRequestAttachments 
+            WHERE RequestID = @RequestID", connection))
+                {
+                    command.Parameters.AddWithValue("@RequestID", requestId);
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            attachments.Add(new AttachmentViewModel
+                            {
+                                AttachmentID = reader.GetInt32(reader.GetOrdinal("AttachmentID")),
+                                RequestID = reader.GetInt32(reader.GetOrdinal("RequestID")),
+                                FileName = reader.GetString(reader.GetOrdinal("FileName")),
+                                UploadedAt = reader.GetDateTime(reader.GetOrdinal("UploadedAt"))
+                            });
+                        }
+                    }
+                }
+            }
+
+            return Ok(attachments);
+        }
+
+        // 4. Add endpoint to download a specific attachment
+        [HttpGet("DownloadAttachment/{attachmentId}")]
+        public async Task<IActionResult> DownloadAttachment(int attachmentId)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand(@"
+                SELECT FileName, FileContent, ContentType
+                FROM FundingRequestAttachments 
+                WHERE AttachmentID = @AttachmentID", connection))
+                    {
+                        command.Parameters.AddWithValue("@AttachmentID", attachmentId);
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            if (await reader.ReadAsync())
+                            {
+                                var fileName = reader.GetString(reader.GetOrdinal("FileName"));
+                                var contentType = reader.IsDBNull(reader.GetOrdinal("ContentType")) ? "application/octet-stream" : reader.GetString(reader.GetOrdinal("ContentType"));
+                                var fileContent = (byte[])reader["FileContent"];
+
+                                // Check the file signature to set a more accurate content type if necessary
+                                string extension = DetectFileExtensionAndContentType(fileContent, ref contentType);
+                                fileName = fileName.Contains('.') ? fileName : $"{fileName}{extension}";
+
+                                return File(fileContent, contentType, fileName);
+                            }
+                        }
+                    }
+                }
+                return NotFound("Attachment not found");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error downloading attachment for ID: {AttachmentId}", attachmentId);
+                return StatusCode(500, "Internal server error while downloading attachment");
+            }
+        }
+
+        // Helper method for file type detection
+        private string DetectFileExtensionAndContentType(byte[] fileContent, ref string contentType)
+        {
+            // Default to binary file if detection fails
+            string extension = ".bin";
+
+            if (fileContent.Length >= 4)
+            {
+                // PDF signature
+                if (fileContent[0] == 0x25 && fileContent[1] == 0x50 && fileContent[2] == 0x44 && fileContent[3] == 0x46)
+                {
+                    contentType = "application/pdf";
+                    extension = ".pdf";
+                }
+                // PNG signature
+                else if (fileContent[0] == 0x89 && fileContent[1] == 0x50 && fileContent[2] == 0x4E && fileContent[3] == 0x47)
+                {
+                    contentType = "image/png";
+                    extension = ".png";
+                }
+                // JPEG signature
+                else if (fileContent[0] == 0xFF && fileContent[1] == 0xD8)
+                {
+                    contentType = "image/jpeg";
+                    extension = ".jpg";
+                }
+                // ZIP signature (could be a DOCX, XLSX, etc.)
+                else if (fileContent[0] == 0x50 && fileContent[1] == 0x4B && fileContent[2] == 0x03 && fileContent[3] == 0x04)
+                {
+                    contentType = "application/zip";
+                    extension = ".zip"; // Adjust based on actual file type if needed
+                }
+                // Additional formats can be added here as needed
+            }
+
+            return extension;
+        }
+
 
         // GET: api/Admin/FundingRequestDetails/{id}
         [HttpGet("FundingRequestDetails/{id}")]
@@ -702,5 +823,211 @@ namespace BumbleBeeFoundation_API.Controllers
 
             return NoContent();
         }
+
+
+
+        // documents
+        // GET: api/admin/documents
+        [HttpGet("documents")]
+        public async Task<ActionResult<List<Document>>> GetDocumentsAsync()
+        {
+            var documents = new List<Document>();
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                var query = @"SELECT d.DocumentID, d.DocumentName, d.DocumentType, d.UploadDate, d.Status, c.CompanyName 
+                              FROM Documents d
+                              INNER JOIN Companies c ON d.CompanyID = c.CompanyID
+                              ORDER BY d.UploadDate DESC";
+
+                using (var cmd = new SqlCommand(query, connection))
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        documents.Add(new Document
+                        {
+                            DocumentID = reader.GetInt32(0),
+                            DocumentName = reader.GetString(1),
+                            DocumentType = reader.GetString(2),
+                            UploadDate = reader.GetDateTime(3),
+                            Status = reader.GetString(4),
+                            CompanyName = reader.GetString(5)
+                        });
+                    }
+                }
+            }
+            return Ok(documents);
+        }
+
+        // POST: api/admin/approve-document
+        [HttpPost("approve-document")]
+        public async Task<IActionResult> ApproveDocumentAsync(int documentId)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                var query = "UPDATE Documents SET Status = 'Approved' WHERE DocumentID = @DocumentID";
+
+                using (var cmd = new SqlCommand(query, connection))
+                {
+                    cmd.Parameters.AddWithValue("@DocumentID", documentId);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+            return Ok();
+        }
+
+        // POST: api/admin/reject-document
+        [HttpPost("reject-document")]
+        public async Task<IActionResult> RejectDocumentAsync(int documentId)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                var query = "UPDATE Documents SET Status = 'Rejected' WHERE DocumentID = @DocumentID";
+
+                using (var cmd = new SqlCommand(query, connection))
+                {
+                    cmd.Parameters.AddWithValue("@DocumentID", documentId);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+            }
+            return Ok();
+        }
+
+        // POST: api/admin/documents-received
+        [HttpPost("documents-received")]
+        public async Task<IActionResult> DocumentsReceivedAsync(int documentId)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+
+                // Step 1: Update the document status
+                var updateDocumentQuery = "UPDATE Documents SET Status = 'Documents Received' WHERE DocumentID = @DocumentID";
+                using (var cmd = new SqlCommand(updateDocumentQuery, connection))
+                {
+                    cmd.Parameters.AddWithValue("@DocumentID", documentId);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                // Step 2: Retrieve the associated RequestID
+                var getRequestIdQuery = "SELECT RequestID FROM Documents WHERE DocumentID = @DocumentID";
+                int? requestId = null;
+                using (var cmd = new SqlCommand(getRequestIdQuery, connection))
+                {
+                    cmd.Parameters.AddWithValue("@DocumentID", documentId);
+                    requestId = (int?)await cmd.ExecuteScalarAsync();
+                }
+
+                // Step 3: Update the funding request status if RequestID was found
+                if (requestId.HasValue)
+                {
+                    var updateRequestQuery = "UPDATE FundingRequests SET Status = 'Documents Received' WHERE RequestID = @RequestID";
+                    using (var cmd2 = new SqlCommand(updateRequestQuery, connection))
+                    {
+                        cmd2.Parameters.AddWithValue("@RequestID", requestId.Value);
+                        await cmd2.ExecuteNonQueryAsync();
+                    }
+                }
+            }
+            return Ok();
+        }
+
+
+        // POST: api/admin/close-request
+        [HttpPost("close-request")]
+        public async Task<IActionResult> CloseRequestAsync(int documentId)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+
+                // Step 1: Update FundingRequests table to set the status to 'Closed'
+                var updateRequestQuery = @"UPDATE FundingRequests 
+                                   SET Status = 'Closed' 
+                                   WHERE RequestID = (SELECT RequestID FROM Documents WHERE DocumentID = @DocumentID)";
+                using (var cmd = new SqlCommand(updateRequestQuery, connection))
+                {
+                    cmd.Parameters.AddWithValue("@DocumentID", documentId);
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                // Step 2: Retrieve the associated RequestID from the Documents table
+                var getRequestIdQuery = "SELECT RequestID FROM Documents WHERE DocumentID = @DocumentID";
+                int? requestId = null;
+                using (var cmd = new SqlCommand(getRequestIdQuery, connection))
+                {
+                    cmd.Parameters.AddWithValue("@DocumentID", documentId);
+                    requestId = (int?)await cmd.ExecuteScalarAsync();
+                }
+
+                // Step 3: If a RequestID was found, update all related documents to 'Closed'
+                if (requestId.HasValue)
+                {
+                    var updateDocumentsQuery = "UPDATE Documents SET Status = 'Closed' WHERE RequestID = @RequestID";
+                    using (var cmd2 = new SqlCommand(updateDocumentsQuery, connection))
+                    {
+                        cmd2.Parameters.AddWithValue("@RequestID", requestId.Value);
+                        await cmd2.ExecuteNonQueryAsync();
+                    }
+                }
+            }
+
+            return Ok();
+        }
+
+
+        // GET: api/admin/download-document/{documentId}
+        [HttpGet("download-document/{documentId}")]
+        public async Task<IActionResult> DownloadDocumentAsync(int documentId)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    using (var command = new SqlCommand(@"
+                SELECT DocumentName, DocumentType, FileContent
+                FROM Documents
+                WHERE DocumentID = @DocumentID", connection))
+                    {
+                        command.Parameters.AddWithValue("@DocumentID", documentId);
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            if (await reader.ReadAsync())
+                            {
+                                var documentName = reader.GetString(reader.GetOrdinal("DocumentName"));
+                                var contentType = reader.GetString(reader.GetOrdinal("DocumentType"));
+                                var fileContent = (byte[])reader["FileContent"];
+
+                                // Detect content type if not set in the database
+                                if (string.IsNullOrEmpty(contentType))
+                                {
+                                    contentType = "application/octet-stream";
+                                }
+
+                                // Determine file extension based on file signature
+                                string extension = DetectFileExtensionAndContentType(fileContent, ref contentType);
+                                documentName = documentName.Contains('.') ? documentName : $"{documentName}{extension}";
+
+                                // Return the file with appropriate headers
+                                return File(fileContent, contentType, documentName);
+                            }
+                        }
+                    }
+                }
+                return NotFound("Document not found");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error downloading document for ID: {DocumentId}", documentId);
+                return StatusCode(500, "Internal server error while downloading document");
+            }
+        }
+
+
     }
 }
