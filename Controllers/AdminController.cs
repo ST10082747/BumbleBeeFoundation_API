@@ -1029,5 +1029,82 @@ namespace BumbleBeeFoundation_API.Controllers
         }
 
 
+        // Reports
+        // GET: api/admin/donation-report
+        [HttpGet("donation-report")]
+        public async Task<ActionResult<List<DonationReportItem>>> GetDonationReport()
+        {
+            List<DonationReportItem> donations = new List<DonationReportItem>();
+
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                string query = @"SELECT d.DonationID, d.DonationDate, d.DonationType, d.DonationAmount, 
+                                         d.DonorName, c.CompanyName
+                                  FROM Donations d
+                                  LEFT JOIN Companies c ON d.CompanyID = c.CompanyID
+                                  ORDER BY d.DonationDate DESC";
+
+                using (SqlCommand cmd = new SqlCommand(query, connection))
+                {
+                    using (SqlDataReader reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            donations.Add(new DonationReportItem
+                            {
+                                DonationID = reader.GetInt32(0),
+                                DonationDate = reader.GetDateTime(1),
+                                DonationType = reader.GetString(2),
+                                DonationAmount = reader.GetDecimal(3),
+                                DonorName = reader.GetString(4),
+                                CompanyName = reader.IsDBNull(5) ? null : reader.GetString(5)
+                            });
+                        }
+                    }
+                }
+            }
+
+            return Ok(donations);
+        }
+
+        // GET: api/admin/funding-request-report
+        [HttpGet("funding-request-report")]
+        public async Task<ActionResult<List<FundingRequestReportItem>>> GetFundingRequestReport()
+        {
+            List<FundingRequestReportItem> requests = new List<FundingRequestReportItem>();
+
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                string query = @"SELECT fr.RequestID, c.CompanyName, fr.ProjectDescription, 
+                                         fr.RequestedAmount, fr.Status, fr.SubmittedAt
+                                  FROM FundingRequests fr
+                                  INNER JOIN Companies c ON fr.CompanyID = c.CompanyID
+                                  ORDER BY fr.SubmittedAt DESC";
+
+                using (SqlCommand cmd = new SqlCommand(query, connection))
+                {
+                    using (SqlDataReader reader = await cmd.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            requests.Add(new FundingRequestReportItem
+                            {
+                                RequestID = reader.GetInt32(0),
+                                CompanyName = reader.GetString(1),
+                                ProjectDescription = reader.GetString(2),
+                                RequestedAmount = reader.GetDecimal(3),
+                                Status = reader.GetString(4),
+                                SubmittedAt = reader.GetDateTime(5)
+                            });
+                        }
+                    }
+                }
+            }
+
+            return Ok(requests);
+        }
+
     }
 }
