@@ -35,7 +35,7 @@ namespace BumbleBeeFoundation_API.Controllers
             using (SqlConnection connection = new SqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
-                string userQuery = "SELECT UserID, Password, Role FROM Users WHERE Email = @Email";
+                string userQuery = "SELECT UserID, Password, Role, FirstName, LastName FROM Users WHERE Email = @Email";
                 using (SqlCommand command = new SqlCommand(userQuery, connection))
                 {
                     command.Parameters.AddWithValue("@Email", model.Email);
@@ -48,6 +48,8 @@ namespace BumbleBeeFoundation_API.Controllers
                             {
                                 int userId = reader.GetInt32(reader.GetOrdinal("UserID"));
                                 string role = reader.GetString(reader.GetOrdinal("Role"));
+                                string firstName = reader.GetString(reader.GetOrdinal("FirstName"));
+                                string lastName = reader.GetString(reader.GetOrdinal("LastName"));
                                 reader.Close();
 
                                 // For Company role
@@ -67,7 +69,9 @@ namespace BumbleBeeFoundation_API.Controllers
                                                     Role = role,
                                                     CompanyID = companyReader.GetInt32(companyReader.GetOrdinal("CompanyID")),
                                                     CompanyName = companyReader.GetString(companyReader.GetOrdinal("CompanyName")),
-                                                    UserEmail = model.Email
+                                                    UserEmail = model.Email,
+                                                    FirstName = firstName,
+                                                    LastName = lastName
                                                 });
                                             }
                                             return BadRequest("Company ID not found.");
@@ -75,14 +79,16 @@ namespace BumbleBeeFoundation_API.Controllers
                                     }
                                 }
 
-                                // For all other roles (Donor, Admin, etc.)
+                                // For all other roles (Donor, Admin)
                                 return Ok(new LoginResponse
                                 {
                                     UserId = userId,
                                     Role = role,
-                                    UserEmail = model.Email,  // Include email for all users
+                                    UserEmail = model.Email,
                                     CompanyID = null,
-                                    CompanyName = null
+                                    CompanyName = null,
+                                    FirstName = firstName,
+                                    LastName = lastName
                                 });
                             }
                             return Unauthorized("Invalid login attempt.");
@@ -92,6 +98,7 @@ namespace BumbleBeeFoundation_API.Controllers
                 }
             }
         }
+
 
         // POST api/account/register
         [HttpPost("register")]
