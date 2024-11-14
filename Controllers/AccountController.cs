@@ -23,6 +23,8 @@ namespace BumbleBeeFoundation_API.Controllers
             _logger = logger;
         }
 
+        // Check the database for the user credentials, then allow them to log in
+
         // POST api/account/login
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginViewModel model)
@@ -99,6 +101,7 @@ namespace BumbleBeeFoundation_API.Controllers
             }
         }
 
+        // Allow a user to register, then add their details to the database
 
         // POST api/account/register
         [HttpPost("register")]
@@ -158,6 +161,8 @@ namespace BumbleBeeFoundation_API.Controllers
             }
         }
 
+        // Allow a user to reset their password
+
         // POST: api/account/forgot-password
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordViewModel model)
@@ -184,6 +189,8 @@ namespace BumbleBeeFoundation_API.Controllers
                 }
             }
         }
+
+        // Reset the password in the database
 
         // POST: api/account/reset-password
         [HttpPost("reset-password")]

@@ -20,6 +20,8 @@ namespace BumbleBeeFoundation_API.Controllers
             _logger = logger;
         }
 
+        // Get all dashboard details from the database for the admin
+
         // GET: api/admin/dashboard
         [HttpGet("dashboard")]
         public async Task<IActionResult> GetDashboardStats()
@@ -49,6 +51,9 @@ namespace BumbleBeeFoundation_API.Controllers
 
             return Ok(dashboardViewModel);
         }
+
+        // User Management portion of the API
+        // Fetch a list of all the users
 
         // GET: api/admin/users
         [HttpGet("users")]
@@ -80,6 +85,8 @@ namespace BumbleBeeFoundation_API.Controllers
 
             return Ok(users);
         }
+
+        // Get details for a specific user
 
         // GET: api/admin/users/{id}
         [HttpGet("users/{id}")]
@@ -118,6 +125,8 @@ namespace BumbleBeeFoundation_API.Controllers
             return Ok(user);
         }
 
+        // Allow an admin to create a user
+
         // POST: api/admin/users
         [HttpPost("users")]
         public async Task<IActionResult> CreateUser([FromBody] User user)
@@ -144,6 +153,8 @@ namespace BumbleBeeFoundation_API.Controllers
 
             return CreatedAtAction(nameof(GetUser), new { id = user.UserID }, user);
         }
+
+        // Allow an admin to edit user details
 
         // PUT: api/admin/users/{id}
         [HttpPut("users/{id}")]
@@ -177,6 +188,8 @@ namespace BumbleBeeFoundation_API.Controllers
             return NoContent();
         }
 
+        // Allow an admin to delete a user
+
         // DELETE: api/admin/users/{id}
         [HttpDelete("users/{id}")]
         public async Task<IActionResult> DeleteUser(int id)
@@ -197,7 +210,9 @@ namespace BumbleBeeFoundation_API.Controllers
 
 
 
-        // company management
+        // Company Management portion of the API
+        // Get a list of all the companies for the admin
+
         // GET: api/admin/companies
         [HttpGet("companies")]
         public async Task<IActionResult> GetCompanies()
@@ -231,8 +246,10 @@ namespace BumbleBeeFoundation_API.Controllers
                 }
             }
 
-            return Ok(companies); // Returns companies as JSON
+            return Ok(companies); 
         }
+
+        // Fetch company details for a specific company
 
         // GET: api/admin/companies/{id}
         [HttpGet("companies/{id}")]
@@ -273,8 +290,10 @@ namespace BumbleBeeFoundation_API.Controllers
                 return NotFound();
             }
 
-            return Ok(company); // Returns company details as JSON
+            return Ok(company); 
         }
+
+        // Allow an admin to approve a company
 
         // POST: api/admin/companies/approve/{id}
         [HttpPost("companies/approve/{id}")]
@@ -292,6 +311,8 @@ namespace BumbleBeeFoundation_API.Controllers
             }
             return Ok(new { message = "Company approved successfully." });
         }
+
+        // Allow an admin to reject a company
 
         // POST: api/admin/companies/reject/{id}
         [HttpPost("companies/reject/{id}")]
@@ -312,8 +333,9 @@ namespace BumbleBeeFoundation_API.Controllers
         }
 
 
+        // Donation Management portion of the API
 
-        // donations
+        // Fetch list of all donations
         // GET: api/donations
         [HttpGet("donations")]
         public async Task<ActionResult<IEnumerable<Donation>>> GetDonations()
@@ -358,6 +380,8 @@ namespace BumbleBeeFoundation_API.Controllers
                 return StatusCode(500, "Internal server error while retrieving donations");
             }
         }
+
+        // Get information about a specific donation
 
         // GET: api/donations/{id}
         [HttpGet("donations/{id}")]
@@ -409,6 +433,8 @@ namespace BumbleBeeFoundation_API.Controllers
             }
         }
 
+        // Allow an admin to approve a donation
+
         // PUT: api/donations/{id}/approve
         [HttpPut("donations/{id}/approve")]
         public async Task<ActionResult<Donation>> ApproveDonation(int id)
@@ -443,6 +469,7 @@ namespace BumbleBeeFoundation_API.Controllers
             }
         }
 
+        // Get documents associated with a donation
 
         // GET: api/donations/{id}/document
         [HttpGet("donations/{id}/document")]
@@ -569,7 +596,7 @@ namespace BumbleBeeFoundation_API.Controllers
                     if (bytes[i] == 0x00)
                     {
                         consecutiveNulls++;
-                        if (consecutiveNulls > 3) // Arbitrary threshold
+                        if (consecutiveNulls > 3) 
                             return false;
                     }
                     else
@@ -587,7 +614,8 @@ namespace BumbleBeeFoundation_API.Controllers
         }
 
 
-        // Funding management
+        // Funding Management portion of the API
+        // Get all funding requests in the database
 
         // GET: api/Admin/FundingRequestManagement
         [HttpGet("FundingRequestManagement")]
@@ -599,13 +627,13 @@ namespace BumbleBeeFoundation_API.Controllers
             {
                 await connection.OpenAsync();
                 using (var command = new SqlCommand(@"
-            SELECT fr.*, c.CompanyName,
-                   CASE WHEN EXISTS (
-                       SELECT 1 FROM FundingRequestAttachments fra 
-                       WHERE fra.RequestID = fr.RequestID
-                   ) THEN 1 ELSE 0 END as HasAttachments
-            FROM FundingRequests fr 
-            JOIN Companies c ON fr.CompanyID = c.CompanyID", connection))
+                    SELECT fr.*, c.CompanyName,
+                           CASE WHEN EXISTS (
+                               SELECT 1 FROM FundingRequestAttachments fra 
+                               WHERE fra.RequestID = fr.RequestID
+                           ) THEN 1 ELSE 0 END as HasAttachments
+                    FROM FundingRequests fr 
+                    JOIN Companies c ON fr.CompanyID = c.CompanyID", connection))
                 {
                     using (var reader = await command.ExecuteReaderAsync())
                     {
@@ -632,7 +660,8 @@ namespace BumbleBeeFoundation_API.Controllers
             return Ok(fundingRequests);
         }
 
-        // 3. Add new endpoint to get attachments for a specific request
+        // Fetch documents related to a specific funding request
+
         [HttpGet("FundingRequestAttachments/{requestId}")]
         public async Task<IActionResult> GetFundingRequestAttachments(int requestId)
         {
@@ -642,9 +671,9 @@ namespace BumbleBeeFoundation_API.Controllers
             {
                 await connection.OpenAsync();
                 using (var command = new SqlCommand(@"
-            SELECT AttachmentID, RequestID, FileName, ContentType, UploadedAt
-            FROM FundingRequestAttachments 
-            WHERE RequestID = @RequestID", connection))
+                SELECT AttachmentID, RequestID, FileName, ContentType, UploadedAt
+                FROM FundingRequestAttachments 
+                WHERE RequestID = @RequestID", connection))
                 {
                     command.Parameters.AddWithValue("@RequestID", requestId);
                     using (var reader = await command.ExecuteReaderAsync())
@@ -666,7 +695,8 @@ namespace BumbleBeeFoundation_API.Controllers
             return Ok(attachments);
         }
 
-        // 4. Add endpoint to download a specific attachment
+        // Allow an admin to download a document
+
         [HttpGet("DownloadAttachment/{attachmentId}")]
         public async Task<IActionResult> DownloadAttachment(int attachmentId)
         {
@@ -676,9 +706,9 @@ namespace BumbleBeeFoundation_API.Controllers
                 {
                     await connection.OpenAsync();
                     using (var command = new SqlCommand(@"
-                SELECT FileName, FileContent, ContentType
-                FROM FundingRequestAttachments 
-                WHERE AttachmentID = @AttachmentID", connection))
+                    SELECT FileName, FileContent, ContentType
+                    FROM FundingRequestAttachments 
+                    WHERE AttachmentID = @AttachmentID", connection))
                     {
                         command.Parameters.AddWithValue("@AttachmentID", attachmentId);
                         using (var reader = await command.ExecuteReaderAsync())
@@ -737,14 +767,15 @@ namespace BumbleBeeFoundation_API.Controllers
                 else if (fileContent[0] == 0x50 && fileContent[1] == 0x4B && fileContent[2] == 0x03 && fileContent[3] == 0x04)
                 {
                     contentType = "application/zip";
-                    extension = ".zip"; // Adjust based on actual file type if needed
+                    extension = ".zip"; 
                 }
-                // Additional formats can be added here as needed
+               
             }
 
             return extension;
         }
 
+        // Fetch details for a specific funding request
 
         // GET: api/Admin/FundingRequestDetails/{id}
         [HttpGet("FundingRequestDetails/{id}")]
@@ -787,6 +818,8 @@ namespace BumbleBeeFoundation_API.Controllers
             return fundingRequest != null ? Ok(fundingRequest) : NotFound();
         }
 
+        // Allow an admin to approve a funding request
+
         // POST: api/Admin/ApproveFundingRequest
         [HttpPost("ApproveFundingRequest")]
         public async Task<IActionResult> ApproveFundingRequest(int id, [FromBody] string adminMessage)
@@ -805,6 +838,8 @@ namespace BumbleBeeFoundation_API.Controllers
 
             return NoContent();
         }
+
+        // Allow an admin to reject a funding request
 
         // POST: api/Admin/RejectFundingRequest
         [HttpPost("RejectFundingRequest")]
@@ -826,7 +861,9 @@ namespace BumbleBeeFoundation_API.Controllers
 
 
 
-        // documents
+        // Document management portion of the API
+        // Fetch all documents in the database
+
         // GET: api/admin/documents
         [HttpGet("documents")]
         public async Task<ActionResult<List<Document>>> GetDocumentsAsync()
@@ -860,6 +897,8 @@ namespace BumbleBeeFoundation_API.Controllers
             return Ok(documents);
         }
 
+        // Allow an admin to approve a document
+
         // POST: api/admin/approve-document
         [HttpPost("approve-document")]
         public async Task<IActionResult> ApproveDocumentAsync(int documentId)
@@ -877,6 +916,8 @@ namespace BumbleBeeFoundation_API.Controllers
             }
             return Ok();
         }
+
+        // Allow an admin to reject a document
 
         // POST: api/admin/reject-document
         [HttpPost("reject-document")]
@@ -896,6 +937,8 @@ namespace BumbleBeeFoundation_API.Controllers
             return Ok();
         }
 
+        // Allow an admin to mark a document as "received"
+
         // POST: api/admin/documents-received
         [HttpPost("documents-received")]
         public async Task<IActionResult> DocumentsReceivedAsync(int documentId)
@@ -904,7 +947,7 @@ namespace BumbleBeeFoundation_API.Controllers
             {
                 await connection.OpenAsync();
 
-                // Step 1: Update the document status
+                // Update the document status
                 var updateDocumentQuery = "UPDATE Documents SET Status = 'Documents Received' WHERE DocumentID = @DocumentID";
                 using (var cmd = new SqlCommand(updateDocumentQuery, connection))
                 {
@@ -912,7 +955,7 @@ namespace BumbleBeeFoundation_API.Controllers
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                // Step 2: Retrieve the associated RequestID
+                // Retrieve the associated RequestID
                 var getRequestIdQuery = "SELECT RequestID FROM Documents WHERE DocumentID = @DocumentID";
                 int? requestId = null;
                 using (var cmd = new SqlCommand(getRequestIdQuery, connection))
@@ -921,7 +964,7 @@ namespace BumbleBeeFoundation_API.Controllers
                     requestId = (int?)await cmd.ExecuteScalarAsync();
                 }
 
-                // Step 3: Update the funding request status if RequestID was found
+                // Update the funding request status if RequestID was found
                 if (requestId.HasValue)
                 {
                     var updateRequestQuery = "UPDATE FundingRequests SET Status = 'Documents Received' WHERE RequestID = @RequestID";
@@ -935,6 +978,7 @@ namespace BumbleBeeFoundation_API.Controllers
             return Ok();
         }
 
+        // Allow an admin to close a funding request
 
         // POST: api/admin/close-request
         [HttpPost("close-request")]
@@ -944,7 +988,7 @@ namespace BumbleBeeFoundation_API.Controllers
             {
                 await connection.OpenAsync();
 
-                // Step 1: Update FundingRequests table to set the status to 'Closed'
+                // Update FundingRequests table to set the status to 'Closed'
                 var updateRequestQuery = @"UPDATE FundingRequests 
                                    SET Status = 'Closed' 
                                    WHERE RequestID = (SELECT RequestID FROM Documents WHERE DocumentID = @DocumentID)";
@@ -954,7 +998,7 @@ namespace BumbleBeeFoundation_API.Controllers
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                // Step 2: Retrieve the associated RequestID from the Documents table
+                // Retrieve the associated RequestID from the Documents table
                 var getRequestIdQuery = "SELECT RequestID FROM Documents WHERE DocumentID = @DocumentID";
                 int? requestId = null;
                 using (var cmd = new SqlCommand(getRequestIdQuery, connection))
@@ -963,7 +1007,7 @@ namespace BumbleBeeFoundation_API.Controllers
                     requestId = (int?)await cmd.ExecuteScalarAsync();
                 }
 
-                // Step 3: If a RequestID was found, update all related documents to 'Closed'
+                // If a RequestID was found, update all related documents to 'Closed'
                 if (requestId.HasValue)
                 {
                     var updateDocumentsQuery = "UPDATE Documents SET Status = 'Closed' WHERE RequestID = @RequestID";
@@ -978,6 +1022,7 @@ namespace BumbleBeeFoundation_API.Controllers
             return Ok();
         }
 
+        // Allow an admin to download a document
 
         // GET: api/admin/download-document/{documentId}
         [HttpGet("download-document/{documentId}")]
@@ -1029,7 +1074,9 @@ namespace BumbleBeeFoundation_API.Controllers
         }
 
 
-        // Reports
+        // Report Management portion of the API
+        // Get all information for the report
+
         // GET: api/admin/donation-report
         [HttpGet("donation-report")]
         public async Task<ActionResult<List<DonationReportItem>>> GetDonationReport()
@@ -1067,6 +1114,8 @@ namespace BumbleBeeFoundation_API.Controllers
 
             return Ok(donations);
         }
+
+        // Get all details for the funding report
 
         // GET: api/admin/funding-request-report
         [HttpGet("funding-request-report")]

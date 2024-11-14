@@ -18,6 +18,8 @@ namespace BumbleBeeFoundation_API.Controllers
             _logger = logger;
         }
 
+        // Get all funding requests associated with the donor
+
         [HttpGet("FundingRequests")]
         public async Task<IActionResult> GetFundingRequests()
         {
@@ -54,6 +56,8 @@ namespace BumbleBeeFoundation_API.Controllers
             }
             return Ok(fundingRequests);
         }
+
+        // Save the user's donation details to the database
 
         [HttpPost("Donate")]
         public async Task<ActionResult<ApiResponse<DonationResponse>>> CreateDonation([FromForm] DonationViewModel model, IFormFile? documentUpload)
@@ -133,6 +137,7 @@ namespace BumbleBeeFoundation_API.Controllers
             }
         }
 
+        // Get details about a specific donation
 
         [HttpGet("Donation/{id}")]
         public async Task<IActionResult> GetDonation(int id)
@@ -174,6 +179,8 @@ namespace BumbleBeeFoundation_API.Controllers
             return donation == null ? NotFound() : Ok(donation);
         }
 
+        // Get donations associated with the user
+
         [HttpGet("Donations/User/{userEmail}")]
         public async Task<IActionResult> GetDonationsForUser(string userEmail)
         {
@@ -206,6 +213,8 @@ namespace BumbleBeeFoundation_API.Controllers
 
             return Ok(donations);
         }
+
+        // Allow a user to search for funding requests
 
         [HttpGet("SearchFundingRequests")]
         public async Task<IActionResult> SearchFundingRequests(string term)

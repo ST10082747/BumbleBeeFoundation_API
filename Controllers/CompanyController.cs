@@ -21,6 +21,8 @@ namespace BumbleBeeFoundation_API.Controllers
             _logger = logger;
         }
 
+        // Get all the details for the company associated with the logged in user
+
         // GET: api/company/{companyId}
         [HttpGet("{companyId}")]
         public async Task<ActionResult<CompanyViewModel>> GetCompanyInfo(int companyId, int userId)
@@ -58,6 +60,8 @@ namespace BumbleBeeFoundation_API.Controllers
             }
             return NotFound();
         }
+
+        // Allow a company to request funding
 
         [HttpPost("RequestFunding")]
         public async Task<ActionResult<int>> RequestFunding([FromForm] FundingRequestViewModel model, [FromForm] List<IFormFile> attachments)
@@ -148,6 +152,8 @@ namespace BumbleBeeFoundation_API.Controllers
             }
         }
 
+        // Provide the company employee with details about their funding request
+
         // GET: api/company/FundingRequestConfirmation/{id}
         [HttpGet("FundingRequestConfirmation/{id}")]
         public async Task<ActionResult<FundingRequestViewModel>> FundingRequestConfirmation(int id)
@@ -197,6 +203,8 @@ namespace BumbleBeeFoundation_API.Controllers
             return NotFound();
         }
 
+        // Allow a company employee to download an attachment
+
         // GET: api/company/DownloadAttachment/{id}
         [HttpGet("DownloadAttachment/{id}")]
         public async Task<IActionResult> DownloadAttachment(int id)
@@ -234,7 +242,7 @@ namespace BumbleBeeFoundation_API.Controllers
                 var cd = new System.Net.Mime.ContentDisposition
                 {
                     FileName = fileName,
-                    Inline = false  // This forces "attachment" instead of "inline"
+                    Inline = false  
                 };
 
                 Response.Headers.Append("Content-Disposition", cd.ToString());
@@ -247,6 +255,8 @@ namespace BumbleBeeFoundation_API.Controllers
                 return StatusCode(500, "Internal server error while processing the request.");
             }
         }
+
+        // Upload the documents selected by the user
 
         // POST: api/company/UploadDocument
         [HttpPost("upload-document")]
@@ -333,6 +343,7 @@ namespace BumbleBeeFoundation_API.Controllers
             }
         }
 
+        // Get the funding request history for the company
 
         // GET: api/company/FundingRequestHistory/{companyId}
         [HttpGet("FundingRequestHistory/{companyId}")]
