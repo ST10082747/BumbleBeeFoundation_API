@@ -39,27 +39,8 @@ namespace BumbleBeeFoundation_API.Models
 
         public DateTime DonationDate { get; set; }
 
-        //[Display(Name = "Document")]
-        //public IFormFile? DocumentUpload { get; set; }
-
         public byte[]? DocumentPath { get; set; }
 
-        //// New Card Fields
-        //[Display(Name = "Card Number")]
-        //[CreditCard]
-        //public string? CardNumber { get; set; }
-
-        //[Display(Name = "Expiry Month")]
-        //[Range(1, 12, ErrorMessage = "Please enter a valid month.")]
-        //public int? ExpiryMonth { get; set; }
-
-        //[Display(Name = "Expiry Year")]
-        //[Range(2024, 2034, ErrorMessage = "Please enter a valid year.")]
-        //public int? ExpiryYear { get; set; }
-
-        //[Display(Name = "CVV")]
-        //[StringLength(4, MinimumLength = 3, ErrorMessage = "CVV must be 3 or 4 digits.")]
-        //public string? CVV { get; set; }
     }
 
     public class DonationResponse
