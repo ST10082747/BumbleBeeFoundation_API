@@ -872,10 +872,21 @@ namespace BumbleBeeFoundation_API.Controllers
             using (var connection = new SqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
-                var query = @"SELECT d.DocumentID, d.DocumentName, d.DocumentType, d.UploadDate, d.Status, c.CompanyName 
-                              FROM Documents d
-                              INNER JOIN Companies c ON d.CompanyID = c.CompanyID
-                              ORDER BY d.UploadDate DESC";
+                var query = @"
+            SELECT 
+                d.DocumentID, 
+                d.DocumentName, 
+                d.DocumentType, 
+                d.UploadDate, 
+                d.Status, 
+                c.CompanyName, 
+                fr.ProjectDescription,
+                d.CompanyID,
+                fr.RequestID
+            FROM Documents d
+            INNER JOIN Companies c ON d.CompanyID = c.CompanyID
+            INNER JOIN FundingRequests fr ON d.RequestID = fr.RequestID
+            ORDER BY d.UploadDate DESC";
 
                 using (var cmd = new SqlCommand(query, connection))
                 using (var reader = await cmd.ExecuteReaderAsync())
@@ -889,13 +900,17 @@ namespace BumbleBeeFoundation_API.Controllers
                             DocumentType = reader.GetString(2),
                             UploadDate = reader.GetDateTime(3),
                             Status = reader.GetString(4),
-                            CompanyName = reader.GetString(5)
+                            CompanyName = reader.GetString(5),
+                            ProjectDescription = reader.GetString(6),
+                            CompanyID = reader.GetInt32(7),
+                            FundingRequestID = reader.GetInt32(8)
                         });
                     }
                 }
             }
             return Ok(documents);
         }
+
 
         // Allow an admin to approve a document
 
@@ -1126,11 +1141,21 @@ namespace BumbleBeeFoundation_API.Controllers
             using (var connection = new SqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
-                string query = @"SELECT fr.RequestID, c.CompanyName, fr.ProjectDescription, 
-                                         fr.RequestedAmount, fr.Status, fr.SubmittedAt
-                                  FROM FundingRequests fr
-                                  INNER JOIN Companies c ON fr.CompanyID = c.CompanyID
-                                  ORDER BY fr.SubmittedAt DESC";
+                string query = @"
+            SELECT 
+                fr.RequestID, 
+                c.CompanyName,
+                c.ContactEmail,
+                c.ContactPhone, 
+                fr.ProjectDescription,
+                fr.ProjectImpact,
+                fr.RequestedAmount, 
+                fr.Status,
+                fr.AdminMessage, 
+                fr.SubmittedAt
+            FROM FundingRequests fr
+            INNER JOIN Companies c ON fr.CompanyID = c.CompanyID
+            ORDER BY fr.SubmittedAt DESC";
 
                 using (SqlCommand cmd = new SqlCommand(query, connection))
                 {
@@ -1142,10 +1167,14 @@ namespace BumbleBeeFoundation_API.Controllers
                             {
                                 RequestID = reader.GetInt32(0),
                                 CompanyName = reader.GetString(1),
-                                ProjectDescription = reader.GetString(2),
-                                RequestedAmount = reader.GetDecimal(3),
-                                Status = reader.GetString(4),
-                                SubmittedAt = reader.GetDateTime(5)
+                                ContactEmail = reader.GetString(2),
+                                ContactPhone = reader.GetString(3),
+                                ProjectDescription = reader.GetString(4),
+                                ProjectImpact = reader.IsDBNull(5) ? null : reader.GetString(5),
+                                RequestedAmount = reader.GetDecimal(6),
+                                Status = reader.GetString(7),
+                                AdminMessage = reader.IsDBNull(8) ? null : reader.GetString(8),
+                                SubmittedAt = reader.GetDateTime(9)
                             });
                         }
                     }
