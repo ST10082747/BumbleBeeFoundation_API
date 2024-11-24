@@ -1,0 +1,43 @@
+name: .NET API Build and Analysis
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build-and-analyze:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 8.0.x
+        
+    - name: Restore dependencies
+      run: dotnet restore
+      
+    - name: Build with analysis
+      run: dotnet build --configuration Release /p:AnalysisMode=All /p:AnalysisLevel=8.0 > analysis_output.txt
+      continue-on-error: true
+      
+    - name: Test
+      run: dotnet test --configuration Release --no-build
+      
+    - name: Process analysis results
+      run: |
+        echo "# Code Analysis Report" > analysis_report.md
+        echo "## Build Warnings and Messages" >> analysis_report.md
+        echo '```' >> analysis_report.md
+        cat analysis_output.txt >> analysis_report.md
+        echo '```' >> analysis_report.md
+        
+    - name: Upload analysis report
+      uses: actions/upload-artifact@v3
+      with:
+        name: code-analysis-report
+        path: analysis_report.md
