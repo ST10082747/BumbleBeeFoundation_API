@@ -4,6 +4,7 @@ using BumbleBeeFoundation_API.Models;
 using System.Text;
 using System.Reflection.Metadata;
 using Document = BumbleBeeFoundation_API.Models.Document;
+using BumbleBeeFoundation_Client;
 
 namespace BumbleBeeFoundation_API.Controllers
 {
@@ -197,16 +198,51 @@ namespace BumbleBeeFoundation_API.Controllers
             using (var connection = new SqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
-                string sql = "DELETE FROM Users WHERE UserID = @UserID";
-                using (var command = new SqlCommand(sql, connection))
+                using (var transaction = connection.BeginTransaction())
                 {
-                    command.Parameters.AddWithValue("@UserID", id);
-                    await command.ExecuteNonQueryAsync();
+                    try
+                    {
+                        // Check if the user is associated with a company
+                        string checkCompanySql = "SELECT COUNT(*) FROM Companies WHERE UserID = @UserID";
+                        using (var checkCommand = new SqlCommand(checkCompanySql, connection, transaction))
+                        {
+                            checkCommand.Parameters.AddWithValue("@UserID", id);
+                            int companyCount = (int)await checkCommand.ExecuteScalarAsync();
+
+                            // If the user is associated with a company, delete the company record
+                            if (companyCount > 0)
+                            {
+                                string deleteCompanySql = "DELETE FROM Companies WHERE UserID = @UserID";
+                                using (var deleteCompanyCommand = new SqlCommand(deleteCompanySql, connection, transaction))
+                                {
+                                    deleteCompanyCommand.Parameters.AddWithValue("@UserID", id);
+                                    await deleteCompanyCommand.ExecuteNonQueryAsync();
+                                }
+                            }
+                        }
+
+                        // Delete the user record
+                        string deleteUserSql = "DELETE FROM Users WHERE UserID = @UserID";
+                        using (var deleteUserCommand = new SqlCommand(deleteUserSql, connection, transaction))
+                        {
+                            deleteUserCommand.Parameters.AddWithValue("@UserID", id);
+                            await deleteUserCommand.ExecuteNonQueryAsync();
+                        }
+
+                        // Commit the transaction
+                        transaction.Commit();
+                        return NoContent();
+                    }
+                    catch (Exception ex)
+                    {
+                        transaction.Rollback();
+                        _logger.LogError(ex, "Error occurred while deleting user with ID: {UserID}", id);
+                        return StatusCode(500, "Internal server error while deleting user.");
+                    }
                 }
             }
-
-            return NoContent();
         }
+
 
 
 
@@ -414,8 +450,8 @@ namespace BumbleBeeFoundation_API.Controllers
                                     DonationType = reader.GetString(reader.GetOrdinal("DonationType")),
                                     DonationAmount = reader.GetDecimal(reader.GetOrdinal("DonationAmount")),
                                     DonorName = reader.GetString(reader.GetOrdinal("DonorName")),
-                                    DonorIDNumber = reader.GetString(reader.GetOrdinal("DonorIDNumber")),
-                                    DonorTaxNumber = reader.GetString(reader.GetOrdinal("DonorTaxNumber")),
+                                    DonorIDNumber = EncryptionHelper.Decrypt(reader.GetString(reader.GetOrdinal("DonorIDNumber"))),
+                                    DonorTaxNumber = EncryptionHelper.Decrypt(reader.GetString(reader.GetOrdinal("DonorTaxNumber"))),
                                     DonorEmail = reader.GetString(reader.GetOrdinal("DonorEmail")),
                                     DonorPhone = reader.GetString(reader.GetOrdinal("DonorPhone"))
                                 };
